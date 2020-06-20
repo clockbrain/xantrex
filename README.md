@@ -1,0 +1,1 @@
+ESPHome custom component to read Xantrex GT2.8 solar inverter values via RS232.
