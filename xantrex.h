@@ -15,13 +15,15 @@ class Xantrex : public Component, public UARTDevice {
   Sensor *freq_sensor = new Sensor();
   Sensor *time_sensor = new Sensor();
   Sensor *temp_sensor = new Sensor();
+
   Xantrex(UARTComponent *parent) : Component(), UARTDevice(parent) {}
 
-  bool pending = false;
-  unsigned long pollTime, responseTime;
-  const int responseWait = 2500; // Wait for each rs232 reply
-  const int pollWait = 300000;    // How frequently to poll for sensor values
-  int elapsedTime;
+  bool response_pending = false;
+  unsigned long poll_time, response_time;
+  const int RESPONSE_WAIT = 2500; // Wait for reply to each rs232 command
+  const int POLL_WAIT = 300000;   // Overall poll cycle for Xantrex sensor values
+                                  // Should be at least as long as RESPONSE_WAIT * number of sensors
+  int elapsed_time;
 
   const char *queries[11] = { "KWHLIFE?\r", "KWHTODAY?\r", "PIN?\r", "POUT?\r",
     "VIN?\r", "VOUT?\r", "IIN?\r", "IOUT?\r",
@@ -29,10 +31,10 @@ class Xantrex : public Component, public UARTDevice {
   int queryNum = 0;
 
   void setup() override {
-    // Start the timer
-    pollTime = millis()-pollWait;
-    responseTime = pollTime;
-    pending = false;
+    // Start the timers
+    poll_time = millis()-POLL_WAIT;
+    response_time = poll_time;
+    response_pending = false;
     // So the readStringUntil doesn't block if no response
     setTimeout(30);
   }
@@ -41,12 +43,10 @@ class Xantrex : public Component, public UARTDevice {
 
     String line = "";
 
-    if (pending) {
+    if (response_pending) {
       // wait after command before checking for a response
-      elapsedTime = (millis() - responseTime);
-      if (elapsedTime > responseWait) {
-        write_str("done waiting\r");
-        flush();
+      elapsed_time = (millis() - response_time);
+      if (elapsed_time > RESPONSE_WAIT) {
         if (available()>0) {
           line = readStringUntil('\r');
           int space = 0;
@@ -84,8 +84,9 @@ class Xantrex : public Component, public UARTDevice {
               break;
             case 10:
               // Temp response format is: C:0.0 F:32.0
+              // Extract the celsius part
               space = line.indexOf(" ");
-              celsius = line.substring(2,space-2);
+              celsius = line.substring(2, space-2);
               temp_sensor->publish_state(celsius.toFloat());
               break;
             default:
@@ -94,26 +95,26 @@ class Xantrex : public Component, public UARTDevice {
           line = "";
         }
         queryNum++;
-        if (queryNum>10) {
+        if (queryNum > 10) {
           queryNum=0;
         }
-        pending = false;
+        response_pending = false;
       }
     }
 
     // check if polling wait time has elapsed for 1st command or 
     // subsequent command is due to be issued
-    elapsedTime = (millis() - pollTime);
-    if (elapsedTime > pollWait || (queryNum > 0 && !pending)) {
+    elapsed_time = (millis() - poll_time);
+    if (elapsed_time > POLL_WAIT || (queryNum > 0 && !response_pending)) {
       // Issue next command
       write_str(queries[queryNum]);
       flush();
-      pending = true;
+      response_pending = true;
       // Reset poll timer and start response timer
-      responseTime = millis();
+      response_time = millis();
       // Keep the overall cycle timer aligned to the 1st command
       if (queryNum == 0) {
-        pollTime = millis();
+        poll_time = millis();
       }
     }
 
