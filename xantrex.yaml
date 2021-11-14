@@ -9,31 +9,25 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   manual_ip:
-    # Set this to the IP of the ESP
     static_ip: 192.168.0.70
-    # Set this to the IP address of the router. Often ends with .1
     gateway: 192.168.0.1
-    # The subnet of the network. 255.255.255.0 works for most home networks.
     subnet: 255.255.255.0
-
-api:
-
-# Enable logging
-logger:
-  level: DEBUG
-  esp8266_store_log_strings_in_flash: False
-
-ota:
-
-mqtt:
-  broker: 192.168.0.6
-  username: mosquitto
 
 uart:
   id: uart_bus
   baud_rate: 9600
   tx_pin: D4
   rx_pin: D3
+
+ota:
+  safe_mode: true
+
+logger:
+  level: VERBOSE
+  baud_rate: 0
+  esp8266_store_log_strings_in_flash: False
+
+api:
 
 sensor:
   - platform: custom 
@@ -44,40 +38,59 @@ sensor:
         my_xantrex->pin_sensor, my_xantrex->pout_sensor,
         my_xantrex->vin_sensor, my_xantrex->vout_sensor,
         my_xantrex->iin_sensor, my_xantrex->iout_sensor,
-        my_xantrex->freq_sensor, my_xantrex->time_sensor, my_xantrex->temp_sensor,
-        };
+        my_xantrex->freq_sensor, my_xantrex->time_sensor, my_xantrex->temp_sensor         };
       
     sensors:
     - name: "PV kwh life"
       unit_of_measurement: "kWh"
+      device_class: "energy"
+      state_class: "total_increasing"
       accuracy_decimals: 0
     - name: "PV kwh today"
       unit_of_measurement: "kWh"
+      device_class: "energy"
+      state_class: "total_increasing"
       accuracy_decimals: 3
     - name: "PV power in"
       unit_of_measurement: "W"
+      device_class: "power"
+      state_class: "measurement"
       accuracy_decimals: 0
     - name: "PV power out"
       unit_of_measurement: "W"
+      device_class: "power"
+      state_class: "measurement"
       accuracy_decimals: 0
     - name: "PV volts in"
       unit_of_measurement: "V"
+      device_class: "voltage"
+      state_class: "measurement"
       accuracy_decimals: 1
     - name: "PV volts out"
       unit_of_measurement: "V"
+      device_class: "voltage"
+      state_class: "measurement"
       accuracy_decimals: 1
     - name: "PV current in"
       unit_of_measurement: "A"
+      device_class: "current"
+      state_class: "measurement"
       accuracy_decimals: 2
     - name: "PV current out"
       unit_of_measurement: "A"
+      device_class: "current"
+      state_class: "measurement"
       accuracy_decimals: 2
     - name: "PV frequency"
       unit_of_measurement: "Hz"
+      state_class: "measurement"
       accuracy_decimals: 3
     - name: "PV time"
       unit_of_measurement: "seconds"
+      state_class: "measurement"
       accuracy_decimals: 0
     - name: "PV temp"
       unit_of_measurement: "°C"
+      device_class: "temperature"
+      state_class: "measurement"
       accuracy_decimals: 1

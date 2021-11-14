@@ -18,103 +18,142 @@ class Xantrex : public Component, public UARTDevice {
 
   Xantrex(UARTComponent *parent) : Component(), UARTDevice(parent) {}
 
-  bool response_pending = false;
-  unsigned long poll_time, response_time;
+  bool command_issued = false;
+  unsigned long cycle_start_time, command_issued_time;
   const int RESPONSE_WAIT = 2500; // Wait for reply to each rs232 command
-  const int POLL_WAIT = 300000;   // Overall poll cycle for Xantrex sensor values
+  const int CYCLE_WAIT = 5*60*1000;   // Overall poll cycle for Xantrex sensor values
                                   // Should be at least as long as RESPONSE_WAIT * number of sensors
-  int elapsed_time;
-
-  const char *queries[11] = { "KWHLIFE?\r", "KWHTODAY?\r", "PIN?\r", "POUT?\r",
+  const char *queries[11] = { 
+    "KWHLIFE?\r", "KWHTODAY?\r", "PIN?\r", "POUT?\r",
     "VIN?\r", "VOUT?\r", "IIN?\r", "IOUT?\r",
     "FREQ?\r", "TIME?\r", "MEASTEMP?\r" };
   int queryNum = 0;
 
   void setup() override {
     // Start the timers
-    poll_time = millis()-POLL_WAIT;
-    response_time = poll_time;
-    response_pending = false;
-    // So the readStringUntil doesn't block if no response
-    setTimeout(30);
+    cycle_start_time = millis()-CYCLE_WAIT;
+    command_issued_time = cycle_start_time;
+    command_issued = false;
+    // Probably not necessary
+    Serial.setTimeout(30);
   }
 
+  int readline(char *buffer, int len) {
+    static int pos = 0;
+    int rpos;
+    int readch;
+
+    while (available() >0) {
+      readch = read();
+      switch (readch) {
+        case '\n': // Ignore new-lines
+          break;
+        case '\r': // Return on CR
+          rpos = pos;
+          pos = 0;  // Reset position index ready for next time
+          return rpos;
+        default:
+          if (pos < len-1) {
+            buffer[pos++] = readch;
+            buffer[pos] = 0;
+          }
+      }
+    }
+    // No end of line has been found, so return -1.
+    return -1;
+  }
+
+  void stripfarenheit(char *buffer, int len) {
+    char *ps;
+    char *cs;
+    // find the space between farenheit and celcius
+    for (ps = buffer; *ps != '\0' && *ps != ' '; ps++) {
+    }
+
+    // Shuffle the celsius to the start 
+    for (cs = buffer; *ps != '\0'; ps++) {
+      *cs++ = *ps;
+    }
+    *cs = '\0';
+  }
+
+
+
   void loop() override {
+    const int max_line_length = 80;
+    static char buffer[max_line_length];
 
-    String line = "";
-
-    if (response_pending) {
+    if (command_issued) {
       // wait after command before checking for a response
-      elapsed_time = (millis() - response_time);
-      if (elapsed_time > RESPONSE_WAIT) {
-        if (available()>0) {
-          line = readStringUntil('\r');
-          int space = 0;
-          String celsius = "";
+      if (millis() > command_issued_time + RESPONSE_WAIT) {
+        ESP_LOGD("Xantrex", "RESPONSE_WAIT elapsed, available (%d)", available());
+        if (readline(buffer, max_line_length)) {
           switch(queryNum) {
             case 0:
-              kwhlife_sensor->publish_state(line.toFloat());
+              kwhlife_sensor->publish_state(atof(buffer));
               break;
             case 1:
-              kwhtoday_sensor->publish_state(line.toFloat());
+              kwhtoday_sensor->publish_state(atof(buffer));
               break;
             case 2:
-              pin_sensor->publish_state(line.toFloat());
+              pin_sensor->publish_state(atof(buffer));
               break;
             case 3:
-              pout_sensor->publish_state(line.toFloat());
+              pout_sensor->publish_state(atof(buffer));
               break;
             case 4:
-              vin_sensor->publish_state(line.toFloat());
+              vin_sensor->publish_state(atof(buffer));
               break;
             case 5:
-              vout_sensor->publish_state(line.toFloat());
+              vout_sensor->publish_state(atof(buffer));
               break;
             case 6:
-              iin_sensor->publish_state(line.toFloat());
+              iin_sensor->publish_state(atof(buffer));
               break;
             case 7:
-              iout_sensor->publish_state(line.toFloat());
+              iout_sensor->publish_state(atof(buffer));
               break;
             case 8:
-              freq_sensor->publish_state(line.toFloat());
+              freq_sensor->publish_state(atof(buffer));
               break;
             case 9:
-              time_sensor->publish_state(line.toFloat());
+              time_sensor->publish_state(atof(buffer));
               break;
             case 10:
               // Temp response format is: C:0.0 F:32.0
               // Extract the celsius part
-              space = line.indexOf(" ");
-              celsius = line.substring(2, space-2);
-              temp_sensor->publish_state(celsius.toFloat());
+              stripfarenheit(buffer, max_line_length);
+              temp_sensor->publish_state(atof(buffer));
               break;
             default:
               break;
           }
-          line = "";
         }
         queryNum++;
         if (queryNum > 10) {
           queryNum=0;
         }
-        response_pending = false;
+        buffer[0] = 0; // Clear the buffer
+        command_issued = false;
       }
     }
 
     // check if polling wait time has elapsed for 1st command or 
     // subsequent command is due to be issued
-    elapsed_time = (millis() - poll_time);
-    if (elapsed_time > POLL_WAIT || (queryNum > 0 && !response_pending)) {
+    if (millis() > cycle_start_time + CYCLE_WAIT || (queryNum > 0 && !command_issued)) {
+      ESP_LOGD("Xantrex", "CYCLE_WAIT elapsed");
       // Issue next command
       write_str(queries[queryNum]);
       flush();
-      response_pending = true;
+
+      command_issued = true;
+
       // Reset poll timer and start response timer
-      response_time = millis();
+      command_issued_time = millis();
+
       // Keep the overall cycle timer aligned to the 1st command
       if (queryNum == 0) {
-        poll_time = millis();
+        cycle_start_time = millis();
       }
     }
 
