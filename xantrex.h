@@ -64,19 +64,24 @@ class Xantrex : public Component, public UARTDevice {
   }
 
   void stripfarenheit(char *buffer, int len) {
-    char *ps;
-    char *cs;
-    // find the space between farenheit and celcius
-    for (ps = buffer; *ps != '\0' && *ps != ' '; ps++) {
-    }
+    static int pos = 0;
 
-    // Shuffle the celsius to the start 
-    for (cs = buffer; *ps != '\0'; ps++) {
-      *cs++ = *ps;
+    // Temp response format is: C:0.0 F:32.0
+    for (pos = 0; buffer[pos] != '\0' && pos < len-1; pos++) {
+      switch (buffer[pos]) {
+        case 'C': // Replace with space
+        case ':': // Replace with space
+          buffer[pos] = ' ';
+          break;
+        case ' ': // Terminate at space
+          buffer[pos] = 0;
+          pos = len-1;  // Force end of loop
+          break;
+        default:
+          break;
+      }
     }
-    *cs = '\0';
   }
-
 
 
   void loop() override {
