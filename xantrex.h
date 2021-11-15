@@ -156,9 +156,9 @@ class Xantrex : public Component, public UARTDevice {
       // Reset poll timer and start response timer
       command_issued_time = millis();
 
-      // Keep the overall cycle timer aligned to the 1st command
       if (queryNum == 0) {
-        cycle_start_time = millis();
+        // Increment the cycle timer by CYCLE_WAIT
+        cycle_start_time = cycle_start_time + CYCLE_WAIT;
       }
     }
 

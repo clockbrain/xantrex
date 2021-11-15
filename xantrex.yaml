@@ -23,7 +23,7 @@ ota:
   safe_mode: true
 
 logger:
-  level: VERBOSE
+  level: INFO
   baud_rate: 0
   esp8266_store_log_strings_in_flash: False
 
